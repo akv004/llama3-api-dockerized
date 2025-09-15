@@ -4,7 +4,7 @@ As we have running host conda environment that work with llam3 API, we will pack
 
 Activate the environment you use for llama3-api:
 
-``bash
+```bash
 conda activate synapse-serve-llama3   # replace with your env name
 ```
 
