@@ -38,7 +38,9 @@ import logging
 
 import requests
 import redis
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, Query
+# add near other imports
+
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -286,28 +288,82 @@ def health():
         "faiss_dir": FAISS_DIR,
     }
 
-# --- OpenAI-compatible endpoint (from serve_model.py) ---
-@app.post("/v1/chat/completions")
-def chat_completions(req: ChatCompletionsRequest):
-    """Stateless, non-streaming endpoint compatible with the OpenAI schema."""
-    msgs = [m.dict() for m in req.messages]
-    t0 = time.time()
 
-    # Render messages, generate, and decode
-    inputs = _render_messages_to_inputs(msgs)
-    cfg = _gen_config(
-        int(req.max_tokens or 256),
-        float(req.temperature or 0.0)
-    )
+
+
+
+# --- OpenAI-compatible endpoint (stateful + optional RAG) ---
+@app.post("/v1/chat/completions")
+def chat_completions(
+    req: ChatCompletionsRequest,
+    x_session_id: Optional[str] = Header(default=None, alias="X-Session-Id"),
+    session_id_q: Optional[str] = Query(default=None, alias="session_id"),
+    use_rag: bool = Query(default=False),
+):
+    """
+    OpenAI-compatible, but can be stateful if you pass a session id.
+    - Provide session via header `X-Session-Id: <id>` (preferred) or query ?session_id=<id>
+    - Enable RAG via query ?use_rag=true
+    """
+    t0 = time.time()
+    session_id = x_session_id or session_id_q
+
+    # 1) Normalize incoming messages to plain dicts
+    msgs = [m.dict() for m in req.messages]
+
+    # 2) Build the conversation to send to the model
+    # If session is provided, we use our stored memory and only append the *latest* user prompt
+    if session_id:
+        sess = load_session(session_id)
+        _ensure_system(sess)
+
+        # Extract the last user message content from OpenAI-style messages
+        last_user = next((m["content"] for m in reversed(msgs) if m.get("role") == "user"), "")
+        user_text = last_user or ""
+        # (Optional) add RAG context
+        if use_rag and retriever is not None and user_text.strip():
+            docs = retriever.get_relevant_documents(user_text)
+            ctx = "\n\n".join(d.page_content for d in docs if d.page_content)
+            if ctx.strip():
+                user_text = f"{user_text}\n\nCONTEXT:\n{ctx}"
+
+        # append to our memory and trim
+        sess["messages"].append({"role": "user", "content": user_text})
+        _trim_pairs(sess, 8)  # or make this configurable
+
+        messages_for_llm = sess["messages"]
+    else:
+        # Stateless path: use exactly what the client sent (OpenAI schema)
+        # If RAG requested, add context to the last user message
+        if use_rag and retriever is not None:
+            for i in range(len(msgs) - 1, -1, -1):
+                if msgs[i].get("role") == "user":
+                    base = msgs[i]["content"] or ""
+                    if base.strip():
+                        docs = retriever.get_relevant_documents(base)
+                        ctx = "\n\n".join(d.page_content for d in docs if d.page_content)
+                        if ctx.strip():
+                            msgs[i]["content"] = f"{base}\n\nCONTEXT:\n{ctx}"
+                    break
+        messages_for_llm = msgs
+
+    # 3) Generate
+    inputs = _render_messages_to_inputs(messages_for_llm)
+    cfg = _gen_config(int(req.max_tokens or 256), float(req.temperature or 0.0))
     with torch.inference_mode():
         out = model.generate(**inputs, generation_config=cfg)
-    
+
     gen = out[0, inputs.input_ids.shape[-1]:]
     text = tok.decode(gen, skip_special_tokens=True).strip()
     text = _collapse_outside_code(text)
     dt = time.time() - t0
 
-    # OpenAI-style response
+    # 4) Persist assistant reply if session is stateful
+    if session_id:
+        sess["messages"].append({"role": "assistant", "content": text})
+        save_session(session_id, sess)
+
+    # 5) OpenAI-style response
     return {
         "id": f"chatcmpl_{int(time.time()*1000)}",
         "object": "chat.completion",
@@ -321,6 +377,19 @@ def chat_completions(req: ChatCompletionsRequest):
         "usage": {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
         "latency_s": round(dt, 3),
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @app.post("/rag/reload")
 def rag_reload():
