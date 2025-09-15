@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: llama3-redis
+    # OPTION A (recommended, fully isolated – no host port):
+    # ports: []              # remove or comment this line
+    # OPTION B (if you need host access without clashing with host Redis):
+    # ports:
+    #   - "6380:6379"
+    volumes:
+      - ./data/redis_data:/data
+    restart: unless-stopped
+
+  llama3-api:
+    build: .
+    container_name: llama3-api
+    depends_on:
+      - redis
+    ports:
+      - "8002:8002"
+    volumes:
+      - /home/amit/projects/.cache/huggingface:/home/appuser/.cache/huggingface
+      - /home/amit/projects/logs:/home/appuser/app/logs
+      - /home/amit/projects/my_rag_data:/home/appuser/app/faiss_index
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - BASE_DIR=/home/appuser/app
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - HUGGINGFACE_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+      - FAISS_DIR=/home/appuser/app/faiss_index
+      - EMBED_MODEL=BAAI/bge-small-en-v1.5
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN}
+    restart: unless-stopped
+    # Ensure GPU in non-swarm compose:
+    gpus: all

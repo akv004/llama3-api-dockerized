@@ -1,0 +1,35 @@
+# k8s/redis.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: synapse # Deploy into the 'synapse' namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: synapse # Expose the service in the 'synapse' namespace
+spec:
+  selector:
+    app: redis # This selector targets the pods from the deployment above
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP # Only exposes the service inside the cluster

@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.log
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar
+*.tar.gz
+*.img
+*.container
+docker-compose.override.yml
+
+# Docker Compose
+data/
+data/*
+!data/.gitkeep
+data/hc_cache/
+data/logs/
+data/redis_data/
+data/redis_data/*
+!data/redis_data/.gitkeep
+data/my_rag_data/
+data/my_rag_data/*
+
+# FAISS index (if generated)
+app/faiss_index/
+app/faiss_index/*
+
+# Logs
+logs/
+*.log
+
+# Redis dump
+*.rdb
+
+# Misc
+*.bak
+*.swp
+*.tmp

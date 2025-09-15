@@ -1,0 +1,10 @@
+# kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraMounts:
+    # Mount the NVIDIA driver libraries from the host into the Kind node.
+    # The path /usr/lib/x86_64-linux-gnu is the standard location on Debian/Ubuntu systems.
+    - hostPath: /usr/lib/x86_64-linux-gnu
+      containerPath: /usr/lib/x86_64-linux-gnu
