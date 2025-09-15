@@ -64,4 +64,14 @@ logs/
 # Misc
 *.bak
 *.swp
-*.tmp
+*.tmp# large/binaries
+k8s/minikube-linux-amd64
+*.tar.gz
+*.zip
+*.whl
+logs/
+data/
+__pycache__/
+*.pyc
+.venv/
+venv/
