@@ -75,3 +75,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# large binaries
+k8s/minikube-linux-amd64
